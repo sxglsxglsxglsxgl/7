@@ -15,8 +15,8 @@
   let state = 'closed'; // 'opening' | 'open' | 'closing'
   let lineAnimations = []; // активные анимации строк
   let showPanelTimer = null;
-  let closePromise = null;
-  let closeToken = null;
+  let closeTimer = null;
+  let closeToken = 0;
   function collectLines() {
     const lines = [];
     const lead = infoCont.querySelector('.lead'); if (lead) lines.push(lead);
@@ -90,13 +90,11 @@
     return numeric * multiplier;
   }
 
-  async function waitForPanelFade() {
+  function getPanelFadeMs() {
     const styles = getComputedStyle(document.documentElement);
     const duration = parseCssTimeToMs(styles.getPropertyValue('--panel-duration'));
     const delay = parseCssTimeToMs(styles.getPropertyValue('--panel-delay-active'));
-    const total = duration + delay;
-    if (total <= 0) return;
-    await new Promise(res => setTimeout(res, total));
+    return duration + delay;
   }
 
   function clearOpenTimers(){
@@ -110,16 +108,40 @@
     if (state !== 'opening') return;
 
     root.classList.remove('panel-opening');
-    root.classList.add('panel-open');
-
-    document.documentElement.style.overflow = 'hidden';
-    document.body.style.overflow = 'hidden';
-
     state = 'open';
   }
 
+  function applyScrollLock(lock){
+    document.documentElement.style.overflow = lock ? 'hidden' : '';
+    document.body.style.overflow = lock ? 'hidden' : '';
+  }
+
+  function ensurePanelVisible(){
+    infoPanel.setAttribute('aria-hidden','false');
+    root.classList.add('panel-open');
+    if (showPanelTimer !== null) {
+      clearTimeout(showPanelTimer);
+    }
+    showPanelTimer = setTimeout(() => {
+      showPanelTimer = null;
+      requestAnimationFrame(fitInfo);
+    }, 120);
+  }
+
+  function cancelClosing(){
+    if (closeTimer !== null) {
+      clearTimeout(closeTimer);
+      closeTimer = null;
+    }
+    closeToken += 1;
+    root.classList.remove('panel-closing');
+  }
+
   function openPanel() {
-    if (state !== 'closed') return; // блокируем повторные клики
+    if (state === 'open' || state === 'opening') return;
+
+    if (state === 'closing') cancelClosing();
+
     state = 'opening';
     if (window.__freezeSafeAreas) window.__freezeSafeAreas();
 
@@ -128,30 +150,36 @@
     menuBtn.classList.add('is-open');
     menuBtn.setAttribute('aria-expanded','true');
 
-    // показываем панель чуть позже слова
-    showPanelTimer = setTimeout(() => {
-      showPanelTimer = null;
-      infoPanel.setAttribute('aria-hidden','false');
-      requestAnimationFrame(fitInfo);
-    }, 120);
+    ensurePanelVisible();
+    applyScrollLock(true);
 
     animateOpenLines().then(finalizeOpen);
   }
 
-  async function closePanel() {
+  function finalizeClose(token){
+    if (token !== closeToken) return;
+
+    infoPanel.setAttribute('aria-hidden','true');
+    applyScrollLock(false);
+    root.classList.remove('panel-closing');
+
+    if (window.__unfreezeSafeAreas) window.__unfreezeSafeAreas();
+
+    state = 'closed';
+    closeTimer = null;
+  }
+
+  function closePanel() {
     if (state === 'closed') return;
-    if (state === 'closing') return closePromise;
+    if (state === 'closing') return;
+
     state = 'closing';
     clearOpenTimers();
 
     stopAllAnimations();
     root.classList.remove('panel-opening');
+    root.classList.remove('panel-open');
     root.classList.add('panel-closing');
-
-    const hadOpenClass = root.classList.contains('panel-open');
-    if (hadOpenClass) {
-      root.classList.remove('panel-open');
-    }
 
     menuBtn.classList.remove('is-open');
     menuBtn.setAttribute('aria-expanded','false');
@@ -159,61 +187,22 @@
     // форс-рефлоу, чтобы переход гарантированно стартовал
     infoPanel.offsetHeight;
 
-    const token = Symbol('close');
-    closeToken = token;
+    const token = closeToken += 1;
+    const waitMs = getPanelFadeMs();
 
-    const finishClose = (async () => {
-      await waitForPanelFade();
-
-      if (closeToken !== token) {
-        if (closePromise === finishClose) closePromise = null;
-        return;
-      }
-
-      // скрываем панель только ПОСЛЕ анимаций
-      infoPanel.setAttribute('aria-hidden','true');
-
-      document.documentElement.style.overflow = '';
-      document.body.style.overflow = '';
-
-      root.classList.remove('panel-closing');
-
-      if (window.__unfreezeSafeAreas) window.__unfreezeSafeAreas();
-
-      state = 'closed';
-      closeToken = null;
-      closePromise = null;
-
-    })();
-
-    closePromise = finishClose;
-
-    return finishClose;
-  }
-
-  function interruptCloseAndReopen(){
-    if (state !== 'closing') return;
-
-    closeToken = null;
-
-    if (closePromise) {
-      closePromise = null;
+    if (waitMs <= 0) {
+      finalizeClose(token);
+      return;
     }
 
-    root.classList.remove('panel-closing');
-
-    state = 'closed';
-
-    openPanel();
+    closeTimer = setTimeout(() => finalizeClose(token), waitMs);
   }
 
   function togglePanel(){
-    if (state === 'closed') {
-      openPanel();
-    } else if (state === 'open' || state === 'opening') {
+    if (state === 'open' || state === 'opening') {
       closePanel();
-    } else if (state === 'closing') {
-      interruptCloseAndReopen();
+    } else {
+      openPanel();
     }
   }
 
