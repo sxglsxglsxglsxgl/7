@@ -9,14 +9,15 @@
 
   // Параметры стадирования
   const OPEN_BASE = 160, OPEN_STEP = 95, OPEN_DUR = 1100;
-  const CLOSE_BASE = 0, CLOSE_STEP = 95, CLOSE_DUR = 900;
 
   const easing = 'cubic-bezier(.16,1,.3,1)';
 
   let state = 'closed'; // 'opening' | 'open' | 'closing'
   let lineAnimations = []; // активные анимации строк
-  let wipeAnimation = null;
-
+  let showPanelTimer = null;
+  let closeTimer = null;
+  let closeToken = 0;
+  let openAbort = null; // отмена текущей анимации открытия строк
   function collectLines() {
     const lines = [];
     const lead = infoCont.querySelector('.lead'); if (lead) lines.push(lead);
@@ -43,11 +44,20 @@
   function stopAllAnimations() {
     lineAnimations.forEach(a => { try { a.cancel(); } catch(e){} });
     lineAnimations = [];
-    if (wipeAnimation) { try { wipeAnimation.cancel(); } catch(e){} wipeAnimation = null; }
+    collectLines().forEach(el => {
+      el.style.opacity = '';
+      el.style.transform = '';
+    });
+    if (wipe) wipe.style.height = '0px';
   }
 
-  async function animateOpenLines() {
+  function animateOpenLines() {
+    if (typeof openAbort === 'function') {
+      try { openAbort(); } catch (e) {}
+      openAbort = null;
+    }
     stopAllAnimations();
+
     const lines = collectLines();
     // форс-рефлоу, чтобы последующие анимации всегда стартовали
     infoCont.offsetHeight;
@@ -69,64 +79,90 @@
       lineAnimations.push(anim);
     });
 
-    // ждём последнюю
-    const lastDelay = OPEN_BASE + (lines.length - 1) * OPEN_STEP;
-    await new Promise(res => setTimeout(res, lastDelay + OPEN_DUR));
-  }
+    const totalDelay = lines.length
+      ? OPEN_BASE + (lines.length - 1) * OPEN_STEP + OPEN_DUR
+      : 0;
 
-  async function animateCloseLines() {
-    stopAllAnimations();
-    const lines = collectLines();
-    // рефлоу
-    infoCont.offsetHeight;
+    let finished = false;
+    const finish = (resolve) => {
+      if (finished) return;
+      finished = true;
+      openAbort = null;
+      resolve();
+    };
 
-    // обратный порядок
-    const n = lines.length;
-    lines.forEach((el, i) => {
-      el.style.opacity = '1';
-      const rev = n - 1 - i;
-      const anim = el.animate(
-        [
-          { opacity: 1, transform: 'translateY(0)' },
-          { opacity: 0, transform: 'translateY(-14px)' }
-        ],
-        {
-          duration: CLOSE_DUR,
-          delay: CLOSE_BASE + rev * CLOSE_STEP,
-          easing,
-          fill: 'forwards'
-        }
-      );
-      lineAnimations.push(anim);
+    return new Promise(resolve => {
+      const timer = setTimeout(() => finish(resolve), totalDelay);
+      openAbort = () => {
+        clearTimeout(timer);
+        stopAllAnimations();
+        finish(resolve);
+      };
     });
-
-    const lastDelay = CLOSE_BASE + (n - 1) * CLOSE_STEP;
-    await new Promise(res => setTimeout(res, lastDelay + CLOSE_DUR));
   }
 
-  function animateWipeUp() {
-    if (!wipe) return Promise.resolve();
-    if (wipeAnimation) { try { wipeAnimation.cancel(); } catch(e){} }
-
-    wipe.style.height = '0px';
-    // форс-рефлоу
-    wipe.offsetHeight;
-
-    wipeAnimation = wipe.animate(
-      [{ height: '0px' }, { height: '100%' }],
-      { duration: CLOSE_DUR, easing, fill: 'forwards' }
-    );
-    return wipeAnimation.finished.catch(() => {});
+  function parseCssTimeToMs(value) {
+    if (!value) return 0;
+    const trimmed = value.trim();
+    if (!trimmed) return 0;
+    const multiplier = trimmed.endsWith('ms') ? 1 : 1000;
+    const numeric = parseFloat(trimmed);
+    if (Number.isNaN(numeric)) return 0;
+    return numeric * multiplier;
   }
 
-  function resetWipe() {
-    if (!wipe) return;
-    if (wipeAnimation) { try { wipeAnimation.cancel(); } catch(e){} }
-    wipe.style.height = '0px';
+  function getPanelFadeMs() {
+    const styles = getComputedStyle(document.documentElement);
+    const duration = parseCssTimeToMs(styles.getPropertyValue('--panel-duration'));
+    const delay = parseCssTimeToMs(styles.getPropertyValue('--panel-delay-active'));
+    return duration + delay;
   }
 
-  async function openPanel() {
-    if (state !== 'closed') return; // блокируем повторные клики
+  function clearOpenTimers(){
+    if (showPanelTimer !== null) {
+      clearTimeout(showPanelTimer);
+      showPanelTimer = null;
+    }
+  }
+
+  function finalizeOpen(){
+    if (state !== 'opening') return;
+
+    root.classList.remove('panel-opening');
+    state = 'open';
+  }
+
+  function applyScrollLock(lock){
+    document.documentElement.style.overflow = lock ? 'hidden' : '';
+    document.body.style.overflow = lock ? 'hidden' : '';
+  }
+
+  function ensurePanelVisible(){
+    infoPanel.setAttribute('aria-hidden','false');
+    root.classList.add('panel-open');
+    if (showPanelTimer !== null) {
+      clearTimeout(showPanelTimer);
+    }
+    showPanelTimer = setTimeout(() => {
+      showPanelTimer = null;
+      requestAnimationFrame(fitInfo);
+    }, 120);
+  }
+
+  function cancelClosing(){
+    if (closeTimer !== null) {
+      clearTimeout(closeTimer);
+      closeTimer = null;
+    }
+    closeToken += 1;
+    root.classList.remove('panel-closing');
+  }
+
+  function openPanel() {
+    if (state === 'open' || state === 'opening') return;
+
+    if (state === 'closing') cancelClosing();
+
     state = 'opening';
     if (window.__freezeSafeAreas) window.__freezeSafeAreas();
 
@@ -135,55 +171,67 @@
     menuBtn.classList.add('is-open');
     menuBtn.setAttribute('aria-expanded','true');
 
-    // показываем панель чуть позже слова
-    setTimeout(() => {
-      infoPanel.setAttribute('aria-hidden','false');
-      requestAnimationFrame(fitInfo);
-    }, 120);
+    ensurePanelVisible();
+    applyScrollLock(true);
 
-    await animateOpenLines();
-
-    // фиксация состояния
-    root.classList.remove('panel-opening');
-    root.classList.add('panel-open');
-
-    document.documentElement.style.overflow = 'hidden';
-    document.body.style.overflow = 'hidden';
-
-    state = 'open';
+    animateOpenLines().then(finalizeOpen);
   }
 
-  async function closePanel() {
-    if (state !== 'open') return; // чтобы не требовалось два клика
-    state = 'closing';
+  function finalizeClose(token){
+    if (token !== closeToken) return;
 
-    root.classList.add('panel-closing');
-    root.classList.remove('panel-open');
-
-    // параллельно: строки вверх + шторка снизу
-    await Promise.all([ animateCloseLines(), animateWipeUp() ]);
-
-    // скрываем панель только ПОСЛЕ анимаций
     infoPanel.setAttribute('aria-hidden','true');
-
-    menuBtn.classList.remove('is-open');
-    menuBtn.setAttribute('aria-expanded','false');
-
-    document.documentElement.style.overflow = '';
-    document.body.style.overflow = '';
-
+    applyScrollLock(false);
     root.classList.remove('panel-closing');
-    resetWipe();
 
     if (window.__unfreezeSafeAreas) window.__unfreezeSafeAreas();
 
     state = 'closed';
+    closeTimer = null;
+  }
+
+  function closePanel() {
+    if (state === 'closed') return;
+    if (state === 'closing') return;
+
+    const wasOpening = state === 'opening';
+
+    state = 'closing';
+    clearOpenTimers();
+
+    if (wasOpening && typeof openAbort === 'function') {
+      openAbort();
+    } else {
+      stopAllAnimations();
+    }
+
+    root.classList.remove('panel-opening');
+    root.classList.remove('panel-open');
+    root.classList.add('panel-closing');
+
+    menuBtn.classList.remove('is-open');
+    menuBtn.setAttribute('aria-expanded','false');
+
+    // форс-рефлоу, чтобы переход гарантированно стартовал
+    infoPanel.offsetHeight;
+
+    const token = closeToken += 1;
+    const waitMs = getPanelFadeMs();
+
+    if (waitMs <= 0) {
+      finalizeClose(token);
+      return;
+    }
+
+    closeTimer = setTimeout(() => finalizeClose(token), waitMs);
   }
 
   function togglePanel(){
-    if (state === 'closed') openPanel();
-    else if (state === 'open') closePanel();
-    // если opening/closing — игнор, клики не принимаем
+    if (state === 'open' || state === 'opening') {
+      closePanel();
+    } else {
+      openPanel();
+    }
   }
 
   // Слушатели

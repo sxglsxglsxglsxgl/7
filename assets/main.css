@@ -94,7 +94,11 @@ body{
   filter: blur(.3px);
 }
 .panel-closing .wordmark{
-  transition-duration: 1.4s;
+  opacity:1;
+  transform: translateY(0) scale(1);
+  filter: none;
+  transition-duration: .9s;
+  transition-delay: 0s;
 }
 
 .menu-btn{
@@ -123,9 +127,7 @@ body{
   --panel-delay-active: 0s;
 }
 
-/* Отключаем клики, пока идёт анимация открытия/закрытия */
-.panel-opening .menu-btn,
-.panel-closing .menu-btn,
+/* Отключаем клики по панели, пока идёт анимация открытия/закрытия */
 .panel-opening .info-panel,
 .panel-closing .info-panel {
   pointer-events: none;
@@ -158,7 +160,8 @@ body{
 }
 .panel-closing .info-panel{
   opacity:0;
-  transform: translateY(8%);
+  transform: translateY(0);
+  visibility: visible;
 }
 
 .info-fit{
