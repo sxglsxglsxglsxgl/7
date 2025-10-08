@@ -15,6 +15,8 @@
   let state = 'closed'; // 'opening' | 'open' | 'closing'
   let lineAnimations = []; // активные анимации строк
   let showPanelTimer = null;
+  let closePromise = null;
+  let reopenAfterClose = false;
   function collectLines() {
     const lines = [];
     const lead = infoCont.querySelector('.lead'); if (lead) lines.push(lead);
@@ -137,8 +139,10 @@
   }
 
   async function closePanel() {
-    if (state === 'closed' || state === 'closing') return;
+    if (state === 'closed') return;
+    if (state === 'closing') return closePromise;
     state = 'closing';
+    reopenAfterClose = false;
 
     clearOpenTimers();
 
@@ -157,25 +161,41 @@
     // форс-рефлоу, чтобы переход гарантированно стартовал
     infoPanel.offsetHeight;
 
-    await waitForPanelFade();
+    const finishClose = (async () => {
+      await waitForPanelFade();
 
-    // скрываем панель только ПОСЛЕ анимаций
-    infoPanel.setAttribute('aria-hidden','true');
+      // скрываем панель только ПОСЛЕ анимаций
+      infoPanel.setAttribute('aria-hidden','true');
 
-    document.documentElement.style.overflow = '';
-    document.body.style.overflow = '';
+      document.documentElement.style.overflow = '';
+      document.body.style.overflow = '';
 
-    root.classList.remove('panel-closing');
+      root.classList.remove('panel-closing');
 
-    if (window.__unfreezeSafeAreas) window.__unfreezeSafeAreas();
+      if (window.__unfreezeSafeAreas) window.__unfreezeSafeAreas();
 
-    state = 'closed';
+      state = 'closed';
+      closePromise = null;
+
+      if (reopenAfterClose) {
+        reopenAfterClose = false;
+        openPanel();
+      }
+    })();
+
+    closePromise = finishClose;
+
+    return finishClose;
   }
 
   function togglePanel(){
-    if (state === 'closed') openPanel();
-    else if (state === 'open' || state === 'opening') closePanel();
-    // если closing — игнор, клики не принимаем
+    if (state === 'closed') {
+      openPanel();
+    } else if (state === 'open' || state === 'opening') {
+      closePanel();
+    } else if (state === 'closing') {
+      reopenAfterClose = true;
+    }
   }
 
   // Слушатели
