@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title">
+  <title>Globe icon</title>
+  <defs>
+    <radialGradient id="ocean" cx="35%" cy="30%" r="75%">
+      <stop offset="0%" stop-color="#193a56"/>
+      <stop offset="60%" stop-color="#10263d"/>
+      <stop offset="100%" stop-color="#050b16"/>
+    </radialGradient>
+    <linearGradient id="land" x1="20%" y1="10%" x2="80%" y2="90%">
+      <stop offset="0%" stop-color="#3c6650"/>
+      <stop offset="70%" stop-color="#1f3b2f"/>
+      <stop offset="100%" stop-color="#0f231b"/>
+    </linearGradient>
+    <linearGradient id="land-highlight" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#4d7f63" stop-opacity="0.8"/>
+      <stop offset="100%" stop-color="#1c3328" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <circle cx="64" cy="64" r="60" fill="url(#ocean)" stroke="#071423" stroke-width="4"/>
+  <path d="M26 74 L33 58 Q38 48 48 42 Q56 36 68 34 Q80 32 92 34 Q104 36 112 40 Q120 45 125 52 Q130 58 130 66 Q130 73 124 79 L132 90 L122 106 L114 96 Q106 104 96 110 Q84 118 70 120 Q58 121 50 114 Q44 108 46 98 L38 92 L42 84 L34 86 Q28 84 25 80 Z" fill="url(#land)"/>
+  <path d="M28 74 L34 60 Q38 52 46 46 Q54 40 66 38 Q78 36 90 38 Q102 40 110 44 Q118 48 122 54 Q126 60 126 66 Q126 71 120 76 L126 86 L118 98 L110 90 Q102 98 92 104 Q82 110 70 112 Q60 113 54 108 Q48 102 50 94 L42 88 L46 80 L38 82 Q32 80 29 78 Z" fill="url(#land-highlight)"/>
+  <path d="M30 74 L36 62 Q40 54 48 48 Q56 42 66 40 Q76 38 88 40 Q98 42 106 45 Q114 49 118 54 Q122 59 122 64 Q122 69 116 74 L122 84 L116 92 L108 86 Q100 94 90 100 Q80 106 70 108 Q62 109 58 105 Q52 100 54 94 L46 88 L50 82 L42 84 Q36 82 33 80 Z" fill="#1b2f25" opacity="0.45"/>
+  <g fill="none" stroke="#0d243b" stroke-width="3" stroke-linecap="round" opacity="0.55">
+    <ellipse cx="64" cy="64" rx="50" ry="18"/>
+    <ellipse cx="64" cy="64" rx="25" ry="58"/>
+    <ellipse cx="64" cy="64" rx="40" ry="58"/>
+    <line x1="64" y1="8" x2="64" y2="120"/>
+    <line x1="8" y1="64" x2="120" y2="64"/>
+  </g>
+</svg>
