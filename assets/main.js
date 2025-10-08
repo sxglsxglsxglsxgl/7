@@ -17,6 +17,7 @@
   let showPanelTimer = null;
   let closeTimer = null;
   let closeToken = 0;
+  let openAbort = null; // отмена текущей анимации открытия строк
   function collectLines() {
     const lines = [];
     const lead = infoCont.querySelector('.lead'); if (lead) lines.push(lead);
@@ -50,8 +51,13 @@
     if (wipe) wipe.style.height = '0px';
   }
 
-  async function animateOpenLines() {
+  function animateOpenLines() {
+    if (typeof openAbort === 'function') {
+      try { openAbort(); } catch (e) {}
+      openAbort = null;
+    }
     stopAllAnimations();
+
     const lines = collectLines();
     // форс-рефлоу, чтобы последующие анимации всегда стартовали
     infoCont.offsetHeight;
@@ -73,11 +79,26 @@
       lineAnimations.push(anim);
     });
 
-    // ждём последнюю
-    const lastDelay = lines.length
-      ? OPEN_BASE + (lines.length - 1) * OPEN_STEP
+    const totalDelay = lines.length
+      ? OPEN_BASE + (lines.length - 1) * OPEN_STEP + OPEN_DUR
       : 0;
-    await new Promise(res => setTimeout(res, lastDelay + OPEN_DUR));
+
+    let finished = false;
+    const finish = (resolve) => {
+      if (finished) return;
+      finished = true;
+      openAbort = null;
+      resolve();
+    };
+
+    return new Promise(resolve => {
+      const timer = setTimeout(() => finish(resolve), totalDelay);
+      openAbort = () => {
+        clearTimeout(timer);
+        stopAllAnimations();
+        finish(resolve);
+      };
+    });
   }
 
   function parseCssTimeToMs(value) {
@@ -173,10 +194,17 @@
     if (state === 'closed') return;
     if (state === 'closing') return;
 
+    const wasOpening = state === 'opening';
+
     state = 'closing';
     clearOpenTimers();
 
-    stopAllAnimations();
+    if (wasOpening && typeof openAbort === 'function') {
+      openAbort();
+    } else {
+      stopAllAnimations();
+    }
+
     root.classList.remove('panel-opening');
     root.classList.remove('panel-open');
     root.classList.add('panel-closing');
