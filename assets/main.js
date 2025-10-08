@@ -15,7 +15,6 @@
   let state = 'closed'; // 'opening' | 'open' | 'closing'
   let lineAnimations = []; // активные анимации строк
   let showPanelTimer = null;
-  let revealTimeout = null;
   function collectLines() {
     const lines = [];
     const lead = infoCont.querySelector('.lead'); if (lead) lines.push(lead);
@@ -122,12 +121,6 @@
     state = 'opening';
     if (window.__freezeSafeAreas) window.__freezeSafeAreas();
 
-    if (revealTimeout !== null) {
-      clearTimeout(revealTimeout);
-      revealTimeout = null;
-    }
-    root.classList.remove('panel-revealing');
-
     // слово уходит «в глубину», бургер → крест
     root.classList.add('panel-opening');
     menuBtn.classList.add('is-open');
@@ -150,10 +143,13 @@
     clearOpenTimers();
 
     stopAllAnimations();
-    const hadOpenClass = root.classList.contains('panel-open');
-
     root.classList.remove('panel-opening');
     root.classList.add('panel-closing');
+
+    const hadOpenClass = root.classList.contains('panel-open');
+    if (hadOpenClass) {
+      root.classList.remove('panel-open');
+    }
 
     menuBtn.classList.remove('is-open');
     menuBtn.setAttribute('aria-expanded','false');
@@ -169,18 +165,7 @@
     document.documentElement.style.overflow = '';
     document.body.style.overflow = '';
 
-    if (hadOpenClass) {
-      root.classList.remove('panel-open');
-    }
     root.classList.remove('panel-closing');
-
-    if (hadOpenClass) {
-      root.classList.add('panel-revealing');
-      revealTimeout = setTimeout(() => {
-        root.classList.remove('panel-revealing');
-        revealTimeout = null;
-      }, 700);
-    }
 
     if (window.__unfreezeSafeAreas) window.__unfreezeSafeAreas();
 
