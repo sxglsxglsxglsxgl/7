@@ -9,13 +9,14 @@
 
   // Параметры стадирования
   const OPEN_BASE = 160, OPEN_STEP = 95, OPEN_DUR = 1100;
-  const CLOSE_BASE = 0, CLOSE_STEP = 95, CLOSE_DUR = 900;
+  const CLOSE_BASE = 0, CLOSE_STEP = 95, CLOSE_DUR = 1000;
 
   const easing = 'cubic-bezier(.16,1,.3,1)';
 
   let state = 'closed'; // 'opening' | 'open' | 'closing'
   let lineAnimations = []; // активные анимации строк
   let wipeAnimation = null;
+  let transitionToken = 0; // для отмены завершения анимаций
 
   function collectLines() {
     const lines = [];
@@ -54,6 +55,7 @@
 
     lines.forEach((el, i) => {
       el.style.opacity = '0';
+      el.style.filter = 'none';
       const anim = el.animate(
         [
           { opacity: 0, transform: 'translateY(14px)' },
@@ -84,16 +86,18 @@
     const n = lines.length;
     lines.forEach((el, i) => {
       el.style.opacity = '1';
+      el.style.filter = 'none';
       const rev = n - 1 - i;
       const anim = el.animate(
         [
-          { opacity: 1, transform: 'translateY(0)' },
-          { opacity: 0, transform: 'translateY(-14px)' }
+          { opacity: 1, transform: 'translateY(0)', filter: 'blur(0px)' },
+          { opacity: 0.6, transform: 'translateY(-6px)', filter: 'blur(2px)' },
+          { opacity: 0, transform: 'translateY(-16px)', filter: 'blur(6px)' }
         ],
         {
           duration: CLOSE_DUR,
           delay: CLOSE_BASE + rev * CLOSE_STEP,
-          easing,
+          easing: 'cubic-bezier(.22,.68,.17,1)',
           fill: 'forwards'
         }
       );
@@ -128,6 +132,7 @@
   async function openPanel() {
     if (state !== 'closed') return; // блокируем повторные клики
     state = 'opening';
+    const token = ++transitionToken;
     if (window.__freezeSafeAreas) window.__freezeSafeAreas();
 
     // слово уходит «в глубину», бургер → крест
@@ -143,6 +148,8 @@
 
     await animateOpenLines();
 
+    if (state !== 'opening' || token !== transitionToken) return; // могли закрыть во время открытия
+
     // фиксация состояния
     root.classList.remove('panel-opening');
     root.classList.add('panel-open');
@@ -154,20 +161,23 @@
   }
 
   async function closePanel() {
-    if (state !== 'open') return; // чтобы не требовалось два клика
+    if (state === 'closed' || state === 'closing') return; // чтобы не требовалось два клика
+
     state = 'closing';
+    transitionToken++;
 
     root.classList.add('panel-closing');
     root.classList.remove('panel-open');
+    root.classList.remove('panel-opening');
+
+    menuBtn.classList.remove('is-open');
+    menuBtn.setAttribute('aria-expanded','false');
 
     // параллельно: строки вверх + шторка снизу
     await Promise.all([ animateCloseLines(), animateWipeUp() ]);
 
     // скрываем панель только ПОСЛЕ анимаций
     infoPanel.setAttribute('aria-hidden','true');
-
-    menuBtn.classList.remove('is-open');
-    menuBtn.setAttribute('aria-expanded','false');
 
     document.documentElement.style.overflow = '';
     document.body.style.overflow = '';
@@ -182,7 +192,7 @@
 
   function togglePanel(){
     if (state === 'closed') openPanel();
-    else if (state === 'open') closePanel();
+    else if (state === 'open' || state === 'opening') closePanel();
     // если opening/closing — игнор, клики не принимаем
   }
 
