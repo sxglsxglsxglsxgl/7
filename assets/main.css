@@ -158,7 +158,8 @@ body{
 }
 .panel-closing .info-panel{
   opacity:0;
-  transform: translateY(8%);
+  transform: translateY(0);
+  visibility: visible;
 }
 
 .info-fit{

@@ -9,14 +9,11 @@
 
   // Параметры стадирования
   const OPEN_BASE = 160, OPEN_STEP = 95, OPEN_DUR = 1100;
-  const CLOSE_BASE = 0, CLOSE_STEP = 95, CLOSE_DUR = 900;
 
   const easing = 'cubic-bezier(.16,1,.3,1)';
 
   let state = 'closed'; // 'opening' | 'open' | 'closing'
   let lineAnimations = []; // активные анимации строк
-  let wipeAnimation = null;
-
   function collectLines() {
     const lines = [];
     const lead = infoCont.querySelector('.lead'); if (lead) lines.push(lead);
@@ -43,7 +40,11 @@
   function stopAllAnimations() {
     lineAnimations.forEach(a => { try { a.cancel(); } catch(e){} });
     lineAnimations = [];
-    if (wipeAnimation) { try { wipeAnimation.cancel(); } catch(e){} wipeAnimation = null; }
+    collectLines().forEach(el => {
+      el.style.opacity = '';
+      el.style.transform = '';
+    });
+    if (wipe) wipe.style.height = '0px';
   }
 
   async function animateOpenLines() {
@@ -74,55 +75,23 @@
     await new Promise(res => setTimeout(res, lastDelay + OPEN_DUR));
   }
 
-  async function animateCloseLines() {
-    stopAllAnimations();
-    const lines = collectLines();
-    // рефлоу
-    infoCont.offsetHeight;
-
-    // обратный порядок
-    const n = lines.length;
-    lines.forEach((el, i) => {
-      el.style.opacity = '1';
-      const rev = n - 1 - i;
-      const anim = el.animate(
-        [
-          { opacity: 1, transform: 'translateY(0)' },
-          { opacity: 0, transform: 'translateY(-14px)' }
-        ],
-        {
-          duration: CLOSE_DUR,
-          delay: CLOSE_BASE + rev * CLOSE_STEP,
-          easing,
-          fill: 'forwards'
-        }
-      );
-      lineAnimations.push(anim);
-    });
-
-    const lastDelay = CLOSE_BASE + (n - 1) * CLOSE_STEP;
-    await new Promise(res => setTimeout(res, lastDelay + CLOSE_DUR));
+  function parseCssTimeToMs(value) {
+    if (!value) return 0;
+    const trimmed = value.trim();
+    if (!trimmed) return 0;
+    const multiplier = trimmed.endsWith('ms') ? 1 : 1000;
+    const numeric = parseFloat(trimmed);
+    if (Number.isNaN(numeric)) return 0;
+    return numeric * multiplier;
   }
 
-  function animateWipeUp() {
-    if (!wipe) return Promise.resolve();
-    if (wipeAnimation) { try { wipeAnimation.cancel(); } catch(e){} }
-
-    wipe.style.height = '0px';
-    // форс-рефлоу
-    wipe.offsetHeight;
-
-    wipeAnimation = wipe.animate(
-      [{ height: '0px' }, { height: '100%' }],
-      { duration: CLOSE_DUR, easing, fill: 'forwards' }
-    );
-    return wipeAnimation.finished.catch(() => {});
-  }
-
-  function resetWipe() {
-    if (!wipe) return;
-    if (wipeAnimation) { try { wipeAnimation.cancel(); } catch(e){} }
-    wipe.style.height = '0px';
+  async function waitForPanelFade() {
+    const styles = getComputedStyle(document.documentElement);
+    const duration = parseCssTimeToMs(styles.getPropertyValue('--panel-duration'));
+    const delay = parseCssTimeToMs(styles.getPropertyValue('--panel-delay-active'));
+    const total = duration + delay;
+    if (total <= 0) return;
+    await new Promise(res => setTimeout(res, total));
   }
 
   async function openPanel() {
@@ -157,11 +126,14 @@
     if (state !== 'open') return; // чтобы не требовалось два клика
     state = 'closing';
 
+    stopAllAnimations();
     root.classList.add('panel-closing');
     root.classList.remove('panel-open');
 
-    // параллельно: строки вверх + шторка снизу
-    await Promise.all([ animateCloseLines(), animateWipeUp() ]);
+    // форс-рефлоу, чтобы переход гарантированно стартовал
+    infoPanel.offsetHeight;
+
+    await waitForPanelFade();
 
     // скрываем панель только ПОСЛЕ анимаций
     infoPanel.setAttribute('aria-hidden','true');
@@ -173,7 +145,6 @@
     document.body.style.overflow = '';
 
     root.classList.remove('panel-closing');
-    resetWipe();
 
     if (window.__unfreezeSafeAreas) window.__unfreezeSafeAreas();
 
