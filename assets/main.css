@@ -127,8 +127,7 @@ body{
   --panel-delay-active: 0s;
 }
 
-/* Отключаем клики, пока идёт анимация открытия */
-.panel-opening .menu-btn,
+/* Отключаем клики по панели, пока идёт анимация открытия/закрытия */
 .panel-opening .info-panel,
 .panel-closing .info-panel {
   pointer-events: none;
