@@ -14,6 +14,7 @@
 
   let state = 'closed'; // 'opening' | 'open' | 'closing'
   let lineAnimations = []; // активные анимации строк
+  let showPanelTimer = null;
   function collectLines() {
     const lines = [];
     const lead = infoCont.querySelector('.lead'); if (lead) lines.push(lead);
@@ -71,7 +72,9 @@
     });
 
     // ждём последнюю
-    const lastDelay = OPEN_BASE + (lines.length - 1) * OPEN_STEP;
+    const lastDelay = lines.length
+      ? OPEN_BASE + (lines.length - 1) * OPEN_STEP
+      : 0;
     await new Promise(res => setTimeout(res, lastDelay + OPEN_DUR));
   }
 
@@ -94,7 +97,26 @@
     await new Promise(res => setTimeout(res, total));
   }
 
-  async function openPanel() {
+  function clearOpenTimers(){
+    if (showPanelTimer !== null) {
+      clearTimeout(showPanelTimer);
+      showPanelTimer = null;
+    }
+  }
+
+  function finalizeOpen(){
+    if (state !== 'opening') return;
+
+    root.classList.remove('panel-opening');
+    root.classList.add('panel-open');
+
+    document.documentElement.style.overflow = 'hidden';
+    document.body.style.overflow = 'hidden';
+
+    state = 'open';
+  }
+
+  function openPanel() {
     if (state !== 'closed') return; // блокируем повторные клики
     state = 'opening';
     if (window.__freezeSafeAreas) window.__freezeSafeAreas();
@@ -105,28 +127,23 @@
     menuBtn.setAttribute('aria-expanded','true');
 
     // показываем панель чуть позже слова
-    setTimeout(() => {
+    showPanelTimer = setTimeout(() => {
+      showPanelTimer = null;
       infoPanel.setAttribute('aria-hidden','false');
       requestAnimationFrame(fitInfo);
     }, 120);
 
-    await animateOpenLines();
-
-    // фиксация состояния
-    root.classList.remove('panel-opening');
-    root.classList.add('panel-open');
-
-    document.documentElement.style.overflow = 'hidden';
-    document.body.style.overflow = 'hidden';
-
-    state = 'open';
+    animateOpenLines().then(finalizeOpen);
   }
 
   async function closePanel() {
-    if (state !== 'open') return; // чтобы не требовалось два клика
+    if (state === 'closed' || state === 'closing') return;
     state = 'closing';
 
+    clearOpenTimers();
+
     stopAllAnimations();
+    root.classList.remove('panel-opening');
     root.classList.add('panel-closing');
     root.classList.remove('panel-open');
 
@@ -153,8 +170,8 @@
 
   function togglePanel(){
     if (state === 'closed') openPanel();
-    else if (state === 'open') closePanel();
-    // если opening/closing — игнор, клики не принимаем
+    else if (state === 'open' || state === 'opening') closePanel();
+    // если closing — игнор, клики не принимаем
   }
 
   // Слушатели

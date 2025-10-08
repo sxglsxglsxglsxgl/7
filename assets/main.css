@@ -94,10 +94,10 @@ body{
   filter: blur(.3px);
 }
 .panel-closing .wordmark{
-  transition-duration: 1.4s;
-  opacity: 0;
-  transform: translateY(12px) scale(.96);
-  filter: blur(.6px);
+  transition-duration: 1s;
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  filter: blur(0);
 }
 
 .menu-btn{
