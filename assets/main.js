@@ -16,7 +16,7 @@
   let lineAnimations = []; // активные анимации строк
   let showPanelTimer = null;
   let closePromise = null;
-  let reopenAfterClose = false;
+  let closeToken = null;
   function collectLines() {
     const lines = [];
     const lead = infoCont.querySelector('.lead'); if (lead) lines.push(lead);
@@ -142,8 +142,6 @@
     if (state === 'closed') return;
     if (state === 'closing') return closePromise;
     state = 'closing';
-    reopenAfterClose = false;
-
     clearOpenTimers();
 
     stopAllAnimations();
@@ -161,8 +159,16 @@
     // форс-рефлоу, чтобы переход гарантированно стартовал
     infoPanel.offsetHeight;
 
+    const token = Symbol('close');
+    closeToken = token;
+
     const finishClose = (async () => {
       await waitForPanelFade();
+
+      if (closeToken !== token) {
+        if (closePromise === finishClose) closePromise = null;
+        return;
+      }
 
       // скрываем панель только ПОСЛЕ анимаций
       infoPanel.setAttribute('aria-hidden','true');
@@ -175,17 +181,30 @@
       if (window.__unfreezeSafeAreas) window.__unfreezeSafeAreas();
 
       state = 'closed';
+      closeToken = null;
       closePromise = null;
 
-      if (reopenAfterClose) {
-        reopenAfterClose = false;
-        openPanel();
-      }
     })();
 
     closePromise = finishClose;
 
     return finishClose;
+  }
+
+  function interruptCloseAndReopen(){
+    if (state !== 'closing') return;
+
+    closeToken = null;
+
+    if (closePromise) {
+      closePromise = null;
+    }
+
+    root.classList.remove('panel-closing');
+
+    state = 'closed';
+
+    openPanel();
   }
 
   function togglePanel(){
@@ -194,7 +213,7 @@
     } else if (state === 'open' || state === 'opening') {
       closePanel();
     } else if (state === 'closing') {
-      reopenAfterClose = true;
+      interruptCloseAndReopen();
     }
   }
 
