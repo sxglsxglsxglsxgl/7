@@ -95,6 +95,9 @@ body{
 }
 .panel-closing .wordmark{
   transition-duration: 1.4s;
+  opacity: 0;
+  transform: translateY(12px) scale(.96);
+  filter: blur(.6px);
 }
 
 .menu-btn{
@@ -123,9 +126,8 @@ body{
   --panel-delay-active: 0s;
 }
 
-/* Отключаем клики, пока идёт анимация открытия/закрытия */
+/* Отключаем клики, пока идёт анимация открытия */
 .panel-opening .menu-btn,
-.panel-closing .menu-btn,
 .panel-opening .info-panel,
 .panel-closing .info-panel {
   pointer-events: none;

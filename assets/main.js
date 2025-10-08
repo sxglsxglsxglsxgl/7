@@ -130,6 +130,9 @@
     root.classList.add('panel-closing');
     root.classList.remove('panel-open');
 
+    menuBtn.classList.remove('is-open');
+    menuBtn.setAttribute('aria-expanded','false');
+
     // форс-рефлоу, чтобы переход гарантированно стартовал
     infoPanel.offsetHeight;
 
@@ -137,9 +140,6 @@
 
     // скрываем панель только ПОСЛЕ анимаций
     infoPanel.setAttribute('aria-hidden','true');
-
-    menuBtn.classList.remove('is-open');
-    menuBtn.setAttribute('aria-expanded','false');
 
     document.documentElement.style.overflow = '';
     document.body.style.overflow = '';
